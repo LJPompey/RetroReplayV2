@@ -5,6 +5,12 @@
 #include <vector>
 #include <sstream>
 #include <algorithm>
+#include <thread>
+#include <atomic>
+#include <mutex>
+
+// --- NEW: Include your dedicated API Engine ---
+#include "APIClient.h"
 
 namespace InitialSetup {
 
@@ -21,9 +27,12 @@ namespace InitialSetup {
     char currentGoals[256] = "";
     char yearlyGoal[256] = "";
 
-    // --- NEW: Tracks if the user has clicked the generation button ---
     bool recommendationsGenerated = false;
     std::string generationErrorMsg = ""; 
+
+    std::atomic<bool> isGenerating{false}; 
+    std::mutex strategyMutex;              
+    std::string finalStrategyText = "";    
 
     // --- HELPER 1: Console Age Validator ---
     bool IsModernConsole(std::string consoleInput) {
@@ -33,7 +42,19 @@ namespace InitialSetup {
         std::vector<std::string> modernConsoles = {
             "ps4", "playstation4", "ps5", "playstation5",
             "xboxone", "xboxseriesx", "xboxseriess",
-            "wiiu", "nintendoswitch", "switch", "steamdeck", "rogally"
+            "wiiu", "nintendoswitch", "switch", "steamdeck", 
+            "rogally", "nintendoswitch2", "switch2", "nintendoswitchlite",
+            "nintendoswitcholed", "switchlite", "switcholed", "nintendowiiu",
+            "lenovolegiongo", "asusrogally", "lenovolegiongos", "msiclawa1m", 
+            "razeredge", "amazonluna", "gefrocenow", "googlestadia",
+            "applevisionpro", "htcvivexrelite", "quest2", "metaquest3", 
+            "metaquest3s", "metaquestpro", "pico4", "playsattionvr",
+            "playstationvr2", "oculusrift", "nintendo3dsxl", "nintendo2ds",
+            "newnintendo2dsxl", "newnintendo3ds", "newnitendo3dsxl", "playstationvita2000",
+            "new3dsxl", "3dsxl", "2ds", "new2dsxl",
+            "new3ds", "vita", "psvita", "steamdecklcd", 
+            "lcdsteamdeck", "steamdecklcd", "oledsteamdeck", "aynthor", 
+            "rogallyx", "xboxrogally" 
         };
 
         for (const auto& modern : modernConsoles) {
@@ -57,7 +78,49 @@ namespace InitialSetup {
         return games;
     }
 
-    void Render(float windowWidth, float windowHeight, GLuint bgTexture, const std::string& currentUsername) {
+    // --- HELPER 3: Background Cloud Worker ---
+    void FetchStrategiesFromCloud(std::vector<SystemRecord> systems, std::string currGoals, std::string yrGoals) {
+        
+        // 1. Compile the list of games for the Master Prompt
+        std::string compiledGames = "";
+        for (const auto& sys : systems) {
+            std::vector<std::string> games = SplitGames(sys.playthrough);
+            for (const auto& game : games) {
+                compiledGames += game + " (" + sys.name + "), ";
+            }
+        }
+
+        // 2. Fetch the Gemini Strategy
+        std::string geminiResponse = APIClient::FetchGeminiStrategy(compiledGames, currGoals, yrGoals);
+
+        // 3. Fetch YouTube Recommendations for each specific game
+        std::string youtubeResponse = "\n3. Recommended Walkthroughs:\n";
+        bool foundAnyVideo = false;
+        
+        for (const auto& sys : systems) {
+            std::vector<std::string> games = SplitGames(sys.playthrough);
+            for (const auto& game : games) {
+                std::string vid = APIClient::FetchYouTubeWalkthrough(game, sys.name);
+                if (!vid.empty()) {
+                    youtubeResponse += vid;
+                    foundAnyVideo = true;
+                }
+            }
+        }
+
+        // 4. Combine and update the UI securely
+        std::string finalOutput = geminiResponse;
+        if (foundAnyVideo) {
+            finalOutput += youtubeResponse;
+        }
+
+        std::lock_guard<std::mutex> lock(strategyMutex);
+        finalStrategyText = finalOutput;
+        isGenerating = false; 
+    }
+
+    // --- UI RENDER LOOP ---
+    bool Render(float windowWidth, float windowHeight, GLuint bgTexture, const std::string& currentUsername) {
         
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         if (bgTexture) {
@@ -125,7 +188,7 @@ namespace InitialSetup {
                 newSys.name = inputStr;
                 userSystems.push_back(newSys);
                 newSystemInput[0] = '\0'; 
-                recommendationsGenerated = false; // Reset generation if they add a new system
+                recommendationsGenerated = false; 
             }
         }
         ImGui::PopStyleColor();
@@ -154,7 +217,7 @@ namespace InitialSetup {
             
             ImGui::Text("Current Playthrough(s) [%s] (Separate with commas):", userSystems[i].name.c_str());
             if (ImGui::InputText("##playthrough", userSystems[i].playthrough, IM_ARRAYSIZE(userSystems[i].playthrough))) {
-                recommendationsGenerated = false; // Reset if they edit their playthroughs
+                recommendationsGenerated = false; 
             }
             
             if (strlen(userSystems[i].playthrough) == 0) {
@@ -194,12 +257,24 @@ namespace InitialSetup {
             
             ImGui::Dummy(ImVec2(0.0f, spacing * 0.5f));
             
-            // --- NEW: GENERATE STRATEGY BUTTON ---
             ImGui::SetCursorPosX((panelWidth - (btnWidth * 0.6f)) * 0.5f);
-            if (ImGui::Button("Generate Strategy", ImVec2(btnWidth * 0.6f, btnHeight * 0.6f))) {
+            
+            if (isGenerating) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+                ImGui::Button("Analyzing data...", ImVec2(btnWidth * 0.6f, btnHeight * 0.6f));
+                ImGui::PopStyleColor();
+            } 
+            else if (ImGui::Button("Generate AI Strategy", ImVec2(btnWidth * 0.6f, btnHeight * 0.6f))) {
                 if (isFormComplete) {
                     recommendationsGenerated = true;
                     generationErrorMsg = "";
+                    isGenerating = true; 
+                    
+                    std::lock_guard<std::mutex> lock(strategyMutex);
+                    finalStrategyText = "Booting AI link... Please wait a few seconds while strategies are compiled.";
+                    
+                    // Spawn the background worker to hit your APIClient!
+                    std::thread(FetchStrategiesFromCloud, userSystems, std::string(currentGoals), std::string(yearlyGoal)).detach();
                 } else {
                     generationErrorMsg = "Error: Please fill out all systems, playthroughs, and goals before generating.";
                 }
@@ -212,22 +287,12 @@ namespace InitialSetup {
 
         } 
         else {
-            ImGui::TextWrapped("1. Playthrough Strategy:");
-            for (const auto& sys : userSystems) {
-                std::vector<std::string> games = SplitGames(sys.playthrough);
-                for (const auto& game : games) {
-                    std::string tip = "";
-                    if (game.length() % 3 == 0) tip = "Focus on completing the main campaign first before getting distracted by side content.";
-                    else if (game.length() % 3 == 1) tip = "Dedicate shorter, 45-minute focused sessions to master the mechanics without burnout.";
-                    else tip = "Keep a quick physical log of your progress or where you left off to maintain momentum.";
-                    
-                    ImGui::TextWrapped("  - For %s [%s]: %s", game.c_str(), sys.name.c_str(), tip.c_str());
-                }
+            std::lock_guard<std::mutex> lock(strategyMutex);
+            if (isGenerating) {
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", finalStrategyText.c_str());
+            } else {
+                ImGui::TextWrapped("%s", finalStrategyText.c_str());
             }
-            ImGui::Dummy(ImVec2(0.0f, spacing * 0.2f));
-
-            std::string rec2 = "After looking through your current and yearly goals, I believe to effectively reach these goals, you should treat your current goals as stepping stones. By establishing a consistent weekend routine targeting your immediate goals, you will effectively snowball your progress toward completing your larger yearly objective.";
-            ImGui::TextWrapped("2. Goal Strategy: %s", rec2.c_str());
         }
 
         ImGui::PopItemWidth();
@@ -259,7 +324,9 @@ namespace InitialSetup {
                 yearlyGoal[0] = '\0';
                 systemErrorMsg = "";
                 generationErrorMsg = "";
-                recommendationsGenerated = false; // Reset the button state on save
+                recommendationsGenerated = false; 
+                
+                return true; 
             }
         }
         ImGui::PopStyleColor(3);
@@ -268,5 +335,7 @@ namespace InitialSetup {
         ImGui::PopStyleVar(2); 
         ImGui::PopStyleColor();
         ImGui::EndChild();
+        
+        return false; 
     }
 }
