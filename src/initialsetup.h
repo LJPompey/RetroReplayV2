@@ -8,8 +8,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
-
-// --- NEW: Include your dedicated API Engine ---
+#include <cstdlib> 
 #include "APIClient.h"
 
 namespace InitialSetup {
@@ -34,7 +33,6 @@ namespace InitialSetup {
     std::mutex strategyMutex;              
     std::string finalStrategyText = "";    
 
-    // --- HELPER 1: Console Age Validator ---
     bool IsModernConsole(std::string consoleInput) {
         std::transform(consoleInput.begin(), consoleInput.end(), consoleInput.begin(), ::tolower);
         consoleInput.erase(std::remove(consoleInput.begin(), consoleInput.end(), ' '), consoleInput.end());
@@ -63,7 +61,6 @@ namespace InitialSetup {
         return false;
     }
 
-    // --- HELPER 2: Comma Parser ---
     std::vector<std::string> SplitGames(const std::string& input) {
         std::vector<std::string> games;
         std::stringstream ss(input);
@@ -78,10 +75,7 @@ namespace InitialSetup {
         return games;
     }
 
-    // --- HELPER 3: Background Cloud Worker ---
     void FetchStrategiesFromCloud(std::vector<SystemRecord> systems, std::string currGoals, std::string yrGoals) {
-        
-        // 1. Compile the list of games for the Master Prompt
         std::string compiledGames = "";
         for (const auto& sys : systems) {
             std::vector<std::string> games = SplitGames(sys.playthrough);
@@ -90,10 +84,8 @@ namespace InitialSetup {
             }
         }
 
-        // 2. Fetch the Gemini Strategy
-        std::string geminiResponse = APIClient::FetchGeminiStrategy(compiledGames, currGoals, yrGoals);
+        std::string aiResponse = APIClient::FetchAIStrategy(compiledGames, currGoals, yrGoals);
 
-        // 3. Fetch YouTube Recommendations for each specific game
         std::string youtubeResponse = "\n3. Recommended Walkthroughs:\n";
         bool foundAnyVideo = false;
         
@@ -108,8 +100,7 @@ namespace InitialSetup {
             }
         }
 
-        // 4. Combine and update the UI securely
-        std::string finalOutput = geminiResponse;
+        std::string finalOutput = aiResponse;
         if (foundAnyVideo) {
             finalOutput += youtubeResponse;
         }
@@ -119,7 +110,6 @@ namespace InitialSetup {
         isGenerating = false; 
     }
 
-    // --- UI RENDER LOOP ---
     bool Render(float windowWidth, float windowHeight, GLuint bgTexture, const std::string& currentUsername) {
         
         ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -167,7 +157,6 @@ namespace InitialSetup {
 
         float itemWidth = panelWidth * 0.8f;
         
-        // --- 1. DYNAMIC SYSTEM INPUT & VALIDATION ---
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "(Note: Retro systems are at least 15 years removed. E.g., 2011 or older)");
         ImGui::Text("Add a System:");
         
@@ -200,7 +189,6 @@ namespace InitialSetup {
         ImGui::Dummy(ImVec2(0.0f, spacing * 0.5f));
         ImGui::Separator();
 
-        // --- 2. DYNAMIC GENERATION LOOP ---
         bool allPlaythroughsFilled = true; 
 
         ImGui::PushItemWidth(itemWidth);
@@ -229,7 +217,6 @@ namespace InitialSetup {
             ImGui::Separator();
         }
 
-        // --- 3. GOALS ---
         ImGui::Dummy(ImVec2(0.0f, spacing * 0.5f));
         ImGui::Text("Current Goals:");
         if (ImGui::InputTextMultiline("##currgoals", currentGoals, IM_ARRAYSIZE(currentGoals), ImVec2(itemWidth, btnHeight * 2.5f))) {
@@ -244,7 +231,6 @@ namespace InitialSetup {
         ImGui::Dummy(ImVec2(0.0f, spacing * 0.5f));
         ImGui::Separator();
 
-        // --- 4. AUTO-GENERATED RECOMMENDATIONS (GATED BY BUTTON) ---
         ImGui::Dummy(ImVec2(0.0f, spacing * 0.5f));
         ImGui::TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "SYSTEM RECOMMENDATIONS:");
         
@@ -273,7 +259,6 @@ namespace InitialSetup {
                     std::lock_guard<std::mutex> lock(strategyMutex);
                     finalStrategyText = "Booting AI link... Please wait a few seconds while strategies are compiled.";
                     
-                    // Spawn the background worker to hit your APIClient!
                     std::thread(FetchStrategiesFromCloud, userSystems, std::string(currentGoals), std::string(yearlyGoal)).detach();
                 } else {
                     generationErrorMsg = "Error: Please fill out all systems, playthroughs, and goals before generating.";
@@ -288,17 +273,89 @@ namespace InitialSetup {
         } 
         else {
             std::lock_guard<std::mutex> lock(strategyMutex);
+            
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.05f, 0.7f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.4f, 0.4f, 0.4f, 0.5f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+            
+            // --- UPDATED: Added ImGuiWindowFlags_HorizontalScrollbar here ---
+            ImGui::BeginChild("StrategyResultsBox", ImVec2(itemWidth, panelHeight * 0.45f), true, ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_HorizontalScrollbar);
+            
             if (isGenerating) {
-                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", finalStrategyText.c_str());
-            } else {
-                ImGui::TextWrapped("%s", finalStrategyText.c_str());
+                ImGui::Dummy(ImVec2(0.0f, spacing));
+                ImGui::SetCursorPosX((itemWidth - ImGui::CalcTextSize("Booting Secure AI Link...").x) * 0.5f);
+                ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Booting Secure AI Link...");
+            } 
+            else {
+                std::istringstream stream(finalStrategyText);
+                std::string line;
+                
+                while (std::getline(stream, line)) {
+                    if (line.empty()) {
+                        ImGui::Dummy(ImVec2(0.0f, 5.0f));
+                        continue;
+                    }
+                    
+                    if (line.find("1. Playthrough") == 0 || line.find("2. Goal") == 0 || line.find("3. Recommended") == 0) {
+                        ImGui::Dummy(ImVec2(0.0f, 5.0f));
+                        ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "%s", line.c_str()); 
+                        ImGui::Separator();
+                        ImGui::Dummy(ImVec2(0.0f, 5.0f));
+                    }
+                    else if (line.find("- For") == 0 || line.find("  - For") == 0) {
+                        ImGui::Bullet();
+                        
+                        size_t bracketStart = line.find("[");
+                        size_t bracketEnd = line.find("]");
+                        
+                        if (bracketStart != std::string::npos && bracketEnd != std::string::npos) {
+                            std::string textPart = line.substr(0, bracketStart);
+                            std::string linkData = line.substr(bracketStart + 1, bracketEnd - bracketStart - 1);
+                            
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                            ImGui::Text("%s", textPart.c_str());
+                            ImGui::PopStyleColor();
+                            
+                            ImGui::SameLine();
+                            
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 0.8f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 0.9f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
+                            
+                            std::string btnLabel = "▶ Watch##" + linkData; 
+                            
+                            if (ImGui::Button(btnLabel.c_str())) {
+                                std::string url = (linkData.find("http") == 0) ? linkData : "https://www.youtube.com/watch?v=" + linkData;
+                                
+                                #if defined(_WIN32)
+                                    std::string cmd = "start \"\" \"" + url + "\"";
+                                    system(cmd.c_str());
+                                #elif defined(__APPLE__)
+                                    std::string cmd = "open \"" + url + "\"";
+                                    system(cmd.c_str());
+                                #else
+                                    std::string cmd = "xdg-open \"" + url + "\"";
+                                    system(cmd.c_str());
+                                #endif
+                            }
+                            ImGui::PopStyleColor(3);
+                        } else {
+                            ImGui::TextWrapped("%s", line.c_str());
+                        }
+                    }
+                    else {
+                        ImGui::TextWrapped("%s", line.c_str());
+                    }
+                }
             }
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
         }
 
         ImGui::PopItemWidth();
         ImGui::Dummy(ImVec2(0.0f, spacing));
 
-        // --- 5. SAVE BUTTON ---
         ImGui::SetCursorPosX((panelWidth - btnWidth) * 0.5f);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 0.8f));        
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 0.9f)); 
