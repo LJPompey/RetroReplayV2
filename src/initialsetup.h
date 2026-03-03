@@ -110,7 +110,8 @@ namespace InitialSetup {
         isGenerating = false; 
     }
 
-    bool Render(float windowWidth, float windowHeight, GLuint bgTexture, const std::string& currentUsername) {
+    // Now returns an INT: 0 = Stay, 1 = Go to Vault, 2 = Logout
+    int Render(float windowWidth, float windowHeight, unsigned int bgTexture, const std::string& currentUsername) {
         
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         if (bgTexture) {
@@ -122,6 +123,7 @@ namespace InitialSetup {
         }
 
         float currentScale, btnWidth, btnHeight, spacing;
+        int actionState = 0; // 0 = Do nothing
 
         if (windowHeight < 900.0f) {
             currentScale = 1.6f;     
@@ -135,6 +137,17 @@ namespace InitialSetup {
             spacing = 45.0f; 
         }
 
+        float originalScale = ImGui::GetIO().FontGlobalScale;
+        ImGui::GetIO().FontGlobalScale = currentScale;
+
+        // --- NEW: TOP-LEFT LOGOUT BUTTON ---
+        ImGui::SetCursorPos(ImVec2(30.0f, 30.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));
+        if (ImGui::Button("<- Logout", ImVec2(btnWidth * 0.4f, btnHeight * 0.6f))) {
+            actionState = 2; // Signal main.cpp to log out
+        }
+        ImGui::PopStyleColor();
+
         float panelWidth = windowWidth * 0.85f; 
         float panelHeight = windowHeight * 0.85f;
         
@@ -144,9 +157,6 @@ namespace InitialSetup {
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.85f)); 
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f)); 
-
-        float originalScale = ImGui::GetIO().FontGlobalScale;
-        ImGui::GetIO().FontGlobalScale = currentScale;
 
         ImGui::BeginChild("SetupPanel", ImVec2(panelWidth, panelHeight), true);
 
@@ -278,7 +288,6 @@ namespace InitialSetup {
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.4f, 0.4f, 0.4f, 0.5f));
             ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
             
-            // --- UPDATED: Added ImGuiWindowFlags_HorizontalScrollbar here ---
             ImGui::BeginChild("StrategyResultsBox", ImVec2(itemWidth, panelHeight * 0.45f), true, ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_HorizontalScrollbar);
             
             if (isGenerating) {
@@ -328,14 +337,11 @@ namespace InitialSetup {
                                 std::string url = (linkData.find("http") == 0) ? linkData : "https://www.youtube.com/watch?v=" + linkData;
                                 
                                 #if defined(_WIN32)
-                                    std::string cmd = "start \"\" \"" + url + "\"";
-                                    system(cmd.c_str());
+                                    system(("start \"\" \"" + url + "\"").c_str());
                                 #elif defined(__APPLE__)
-                                    std::string cmd = "open \"" + url + "\"";
-                                    system(cmd.c_str());
+                                    system(("open \"" + url + "\"").c_str());
                                 #else
-                                    std::string cmd = "xdg-open \"" + url + "\"";
-                                    system(cmd.c_str());
+                                    system(("xdg-open \"" + url + "\"").c_str());
                                 #endif
                             }
                             ImGui::PopStyleColor(3);
@@ -370,11 +376,17 @@ namespace InitialSetup {
                     if (i < userSystems.size() - 1) compiledSystems += "^"; 
                 }
                 
-                outfile << currentUsername << ","
-                        << compiledSystems << ","
-                        << currentGoals << ","
+                outfile << currentUsername << "~"
+                        << compiledSystems << "~"
+                        << currentGoals << "~"
                         << yearlyGoal << "\n";
                 outfile.close();
+
+                std::ofstream stratFile("strategy_" + currentUsername + ".txt");
+                if (stratFile.is_open()) {
+                    stratFile << finalStrategyText;
+                    stratFile.close();
+                }
                 
                 userSystems.clear();
                 currentGoals[0] = '\0';
@@ -383,16 +395,18 @@ namespace InitialSetup {
                 generationErrorMsg = "";
                 recommendationsGenerated = false; 
                 
-                return true; 
+                actionState = 1; // Signal main.cpp to enter Vault
             }
         }
         ImGui::PopStyleColor(3);
 
-        ImGui::GetIO().FontGlobalScale = originalScale; 
         ImGui::PopStyleVar(2); 
         ImGui::PopStyleColor();
-        ImGui::EndChild();
+        ImGui::EndChild(); 
         
-        return false; 
+        // Reset scale before returning
+        ImGui::GetIO().FontGlobalScale = originalScale; 
+        
+        return actionState; 
     }
 }

@@ -9,7 +9,8 @@
 #include <ctime>   
 #include <sstream> 
 #include <vector> 
-#include "InitialSetup.h" // Includes our new Setup form!
+#include "InitialSetup.h" 
+#include "VaultDashboard.h" 
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -22,33 +23,29 @@ enum class AppState {
     GetStarted,
     WelcomeBack,
     ForgotPassword,
-    InitialSetup
+    InitialSetup,
+    VaultDashboard 
 };
 
 AppState currentState = AppState::WelcomeScreen;
 
-// Buffers for Registration
 char regUsername[128] = "";
 char regPassword[128] = "";
 bool showConfirmation = false;
 std::string registrationError = ""; 
 
-// Buffers for Login
 char loginUsername[128] = "";
 char loginPassword[128] = "";
 std::string loginError = "";
 std::string loginSuccessMsg = "";
 
-// Buffers for Password Reset
 char resetUsername[128] = "";
 char resetPassword[128] = "";
 std::string resetError = "";
 std::string resetSuccessMsg = "";
 
-// --- NEW: TRACKS THE LOGGED-IN USER ---
 std::string activeUser = ""; 
 
-// Helper function to load an image
 bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height) {
     int image_width = 0, image_height = 0;
     unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
@@ -68,9 +65,20 @@ bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_wid
     return true;
 }
 
-// ----------------------------------------------------
-// VALIDATION & SECURITY FUNCTIONS
-// ----------------------------------------------------
+// --- NEW: THE "SKIP SETUP" SCANNER ---
+bool HasCompletedSetup(const std::string& targetUser) {
+    std::ifstream file("profiles.csv");
+    if (!file.is_open()) return false;
+    std::string line;
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string savedUser;
+        std::getline(ss, savedUser, '~');
+        if (savedUser == targetUser) return true; // Profile data exists!
+    }
+    return false;
+}
+
 bool IsValidUsername(const std::string& uname) {
     if (uname.empty() || uname.length() > 12) return false;
     if (uname.find(',') != std::string::npos) return false; 
@@ -218,6 +226,7 @@ int main() {
         float scaledRepH = scaledRepW * ((float)repH / (float)repW);
         
         float logoY, btnWidth, btnHeight, buttonStartY, spacing, guideOffset, errorOffset;
+        float backBtnW, backBtnH;
 
         if (windowHeight < 900.0f) {
             ImGui::SetWindowFontScale(1.5f); 
@@ -229,6 +238,9 @@ int main() {
             
             guideOffset = btnHeight * 0.4f;
             errorOffset = btnHeight * 2.5f; 
+            
+            backBtnW = 120.0f; 
+            backBtnH = 35.0f;
         } 
         else {
             ImGui::SetWindowFontScale(2.5f); 
@@ -240,6 +252,9 @@ int main() {
             
             guideOffset = btnHeight * 0.4f;
             errorOffset = btnHeight * 3.0f; 
+            
+            backBtnW = 200.0f;
+            backBtnH = 75.0f;
         }
 
         if (replayLogo) {
@@ -275,6 +290,14 @@ int main() {
         // STATE: GET STARTED (Registration)
         // ----------------------------------------------------
         else if (currentState == AppState::GetStarted) {
+            // NEW: Top-Left Back Button
+            ImGui::SetCursorPos(ImVec2(30.0f, 30.0f));
+            if (ImGui::Button("<- Back", ImVec2(backBtnW, backBtnH))) {
+                registrationError = ""; 
+                showConfirmation = false;
+                currentState = AppState::WelcomeScreen;
+            }
+
             if (!showConfirmation) {
                 ImGui::PushItemWidth(btnWidth); 
 
@@ -337,13 +360,6 @@ int main() {
                         }
                     }
                 }
-
-                ImGui::SetCursorPosX((trueWindowWidth - btnWidth) * 0.5f);
-                ImGui::SetCursorPosY(buttonStartY + (btnHeight * 2.3f) + (spacing * 2));
-                if (ImGui::Button("<- Back", ImVec2(btnWidth, btnHeight))) {
-                    registrationError = ""; 
-                    currentState = AppState::WelcomeScreen;
-                }
             } 
             else {
                 const char* successMsg = "Account saved successfully!";
@@ -354,9 +370,7 @@ int main() {
                 ImGui::SetCursorPosX((trueWindowWidth - btnWidth) * 0.5f);
                 ImGui::SetCursorPosY(buttonStartY + btnHeight + spacing);
                 if (ImGui::Button("Continue to Initial Setup", ImVec2(btnWidth, btnHeight))) {
-                    // --- FIXED: SAVE THE ACTIVE USER HERE ---
                     activeUser = std::string(regUsername);
-                    
                     showConfirmation = false;
                     regUsername[0] = '\0';
                     regPassword[0] = '\0';
@@ -368,6 +382,13 @@ int main() {
         // STATE: WELCOME BACK (Login)
         // ----------------------------------------------------
         else if (currentState == AppState::WelcomeBack) {
+            // NEW: Top-Left Back Button
+            ImGui::SetCursorPos(ImVec2(30.0f, 30.0f));
+            if (ImGui::Button("<- Back", ImVec2(backBtnW, backBtnH))) {
+                loginError = "";
+                currentState = AppState::WelcomeScreen;
+            }
+
             if (loginSuccessMsg.empty()) {
                 ImGui::PushItemWidth(btnWidth); 
 
@@ -460,13 +481,6 @@ int main() {
                 ImGui::PopStyleColor();
 
                 ImGui::SetWindowFontScale(currentScale);
-
-                ImGui::SetCursorPosX((trueWindowWidth - btnWidth) * 0.5f);
-                ImGui::SetCursorPosY(currentY + smallBtnHeight + spacing);
-                if (ImGui::Button("<- Back", ImVec2(btnWidth, btnHeight))) {
-                    loginError = "";
-                    currentState = AppState::WelcomeScreen;
-                }
             }
             else {
                 ImGui::SetCursorPosX((trueWindowWidth - ImGui::CalcTextSize(loginSuccessMsg.c_str()).x) * 0.5f);
@@ -476,13 +490,18 @@ int main() {
                 ImGui::SetCursorPosX((trueWindowWidth - btnWidth) * 0.5f);
                 ImGui::SetCursorPosY(buttonStartY + btnHeight + spacing);
                 if (ImGui::Button("Enter Vault", ImVec2(btnWidth, btnHeight))) {
-                    // --- FIXED: SAVE THE ACTIVE USER HERE ---
                     activeUser = std::string(loginUsername);
                     
                     loginSuccessMsg = "";
                     loginUsername[0] = '\0';
                     loginPassword[0] = '\0';
-                    currentState = AppState::InitialSetup; 
+                    
+                    // --- NEW: THE SKIP-SETUP CHECK ---
+                    if (HasCompletedSetup(activeUser)) {
+                        currentState = AppState::VaultDashboard; 
+                    } else {
+                        currentState = AppState::InitialSetup; 
+                    }
                 }
             }
         }
@@ -491,6 +510,13 @@ int main() {
         // ----------------------------------------------------
         else if (currentState == AppState::ForgotPassword) {
             
+            // NEW: Top-Left Back Button
+            ImGui::SetCursorPos(ImVec2(30.0f, 30.0f));
+            if (ImGui::Button("<- Back", ImVec2(backBtnW, backBtnH))) {
+                resetError = "";
+                currentState = AppState::WelcomeBack;
+            }
+
             if (resetSuccessMsg.empty()) {
                 ImGui::PushItemWidth(btnWidth); 
 
@@ -550,13 +576,6 @@ int main() {
                         }
                     }
                 }
-
-                ImGui::SetCursorPosX((trueWindowWidth - btnWidth) * 0.5f);
-                ImGui::SetCursorPosY(buttonStartY + (btnHeight * 2.6f) + (spacing * 2));
-                if (ImGui::Button("<- Back to Login", ImVec2(btnWidth, btnHeight))) {
-                    resetError = "";
-                    currentState = AppState::WelcomeBack;
-                }
             } 
             else {
                 ImGui::SetCursorPosX((trueWindowWidth - ImGui::CalcTextSize(resetSuccessMsg.c_str()).x) * 0.5f);
@@ -577,8 +596,31 @@ int main() {
         // STATE: INITIAL SETUP
         // ----------------------------------------------------
         else if (currentState == AppState::InitialSetup) {
-            // --- FIXED: FUNCTION NOW HAS ALL 4 ARGUMENTS ---
-            InitialSetup::Render(trueWindowWidth, windowHeight, bgTexture, activeUser);
+            
+            // Render now returns an integer indicating what action the user took
+            int setupAction = InitialSetup::Render(trueWindowWidth, windowHeight, bgTexture, activeUser);
+            
+            if (setupAction == 1) {
+                // Signal 1: They completed setup successfully
+                currentState = AppState::VaultDashboard; 
+            } 
+            else if (setupAction == 2) {
+                // Signal 2: They clicked the Logout button at the top left
+                activeUser = "";
+                currentState = AppState::WelcomeScreen;
+            }
+        }
+        // ----------------------------------------------------
+        // STATE: VAULT DASHBOARD
+        // ----------------------------------------------------
+        else if (currentState == AppState::VaultDashboard) {
+            // Render now returns a bool indicating if they clicked Logout in the sidebar
+            bool userLoggedOut = VaultDashboard::Render(trueWindowWidth, windowHeight, bgTexture, activeUser);
+            
+            if (userLoggedOut) {
+                activeUser = "";
+                currentState = AppState::WelcomeScreen;
+            }
         }
 
         ImGui::PopStyleColor(3); 
