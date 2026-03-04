@@ -18,16 +18,16 @@ add_library(ImGui STATIC
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )
 target_include_directories(ImGui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
-# FIX: Tell the ImGui backend where GLFW is located
+# Tells the ImGui backend where GLFW is located
 target_link_libraries(ImGui PRIVATE glfw) 
 
 # 3. Find OpenGL
 find_package(OpenGL REQUIRED)
 
 # ---------------------------------------------------------
-# NEW: NETWORK LIBRARIES
+# NETWORK LIBRARIES
 # ---------------------------------------------------------
-# Enable the FetchContent module
+# Enables the FetchContent module
 include(FetchContent)
 
 # Download nlohmann/json (For parsing the API responses)
@@ -57,7 +57,7 @@ target_include_directories(RetroReplayV2 PRIVATE
     third_party/glfw/include
 )
 
-# 6. Link everything together (NEW LIBRARIES ADDED HERE)
+# 6. Link everything together
 target_link_libraries(RetroReplayV2 PRIVATE 
     ImGui 
     glfw 

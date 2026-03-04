@@ -31,7 +31,7 @@ namespace APIClient {
 
         std::string url = "https://api.groq.com/openai/v1/chat/completions";
 
-        std::string prompt = "You are a master retro gaming strategist. The user is playing these specific games on these systems: " + compiledGames + ". " +
+        std::string prompt = "You are a top retro gaming enthusiast. The user is playing these specific games on these systems: " + compiledGames + ". " +
                              "Their current goals are: " + currentGoals + ". Their yearly goals are: " + yearlyGoal + ". " +
                              "Please format your response exactly like this:\n\n" +
                              "1. Playthrough Strategy:\n" +
@@ -41,7 +41,7 @@ namespace APIClient {
                              "[Provide a 3-sentence strategy dynamically connecting their specific games to their current and yearly goals.]\n\n" +
                              "Keep your response clean and professional. Do not use markdown bolding or asterisks, just plain text.";
 
-    // Update the model string to the Safeguard 20B model
+    // Update the model string to the Safeguard 20B model (or latest model available)
         nlohmann::json requestBody = {
             {"model", "openai/gpt-oss-safeguard-20b"}, 
             {"messages", {{

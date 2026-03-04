@@ -1,5 +1,6 @@
 #pragma once
 #include "imgui.h"
+#include "GameManagement.h"
 #include <string>
 #include <vector>
 #include <fstream>
@@ -31,6 +32,7 @@ namespace VaultDashboard {
         isProfileLoaded = false;
         activeUser = UserProfile();
         activeTab = 0;
+        GameManagement::isDataLoaded = false; // Reset management state too!
     }
 
     void LoadUserData(const std::string& targetUsername) {
@@ -83,7 +85,7 @@ namespace VaultDashboard {
                     activeUser.savedStrategy = buffer.str();
                     stratFile.close();
                 } else {
-                    activeUser.savedStrategy = "No saved strategy found. Please generate one in the Setup Phase.";
+                    activeUser.savedStrategy = "No saved strategy found. Please generate one in Initial Setup.";
                 }
 
                 isProfileLoaded = true;
@@ -92,19 +94,20 @@ namespace VaultDashboard {
         }
     }
 
-    // Now returns a bool: TRUE if the user clicked Logout
+    // Returns a bool: TRUE if the user clicked Logout
     bool Render(float windowWidth, float windowHeight, unsigned int bgTexture, const std::string& currentUsername) {
         if (!isProfileLoaded) {
             LoadUserData(currentUsername);
         }
 
-        // --- NEW: DYNAMIC SCALING FOR DASHBOARD ---
+        // --- DYNAMIC SCALING FOR DASHBOARD ---
         float currentScale = (windowHeight < 900.0f) ? 1.5f : 2.5f;
         float originalScale = ImGui::GetIO().FontGlobalScale;
         ImGui::GetIO().FontGlobalScale = currentScale;
 
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         
+        // Render Dashboard Background
         if (bgTexture) {
             ImGui::GetWindowDrawList()->AddImage(
                 (void*)(intptr_t)bgTexture, 
@@ -129,7 +132,7 @@ namespace VaultDashboard {
         
         ImGui::Dummy(ImVec2(0.0f, 20.0f));
         ImGui::SetCursorPosX(sidebarWidth * 0.1f);
-        ImGui::TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "RETRO REPLAY");
+        ImGui::TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "RetroREPLAY");
         ImGui::SetCursorPosX(sidebarWidth * 0.1f);
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "VAULT: %s", activeUser.username.c_str());
         
@@ -143,12 +146,23 @@ namespace VaultDashboard {
         ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.1f, 0.5f)); 
 
         ImVec2 btnSize = ImVec2(sidebarWidth, 50.0f * currentScale);
-        if (ImGui::Button("  [ Home Page ]", btnSize)) activeTab = 0;
+        
+        // --- TAB SWITCHING LOGIC ---
+        if (ImGui::Button("  [ Home Page ]", btnSize)) {
+            activeTab = 0;
+            isProfileLoaded = false; // Force a reload from CSV so edits appear instantly!
+        }
+        
+        // --- MANAGE DATA BUTTON ---
+        if (ImGui::Button("  [ Manage Data ]", btnSize)) {
+            activeTab = 3;
+            GameManagement::isDataLoaded = false; // Force edit tab to grab the latest data!
+        }
 
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
 
-        // --- NEW: LOGOUT BUTTON (Anchored to bottom of sidebar) ---
+        // --- LOGOUT BUTTON ---
         ImGui::SetCursorPosY(windowHeight - (80.0f * currentScale));
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 0.4f)); 
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 0.8f));
@@ -167,20 +181,20 @@ namespace VaultDashboard {
         ImGui::EndChild();
 
         // ==========================================
-        // RIGHT MAIN CONTENT AREA (THE HOME PAGE)
+        // RIGHT MAIN CONTENT AREA
         // ==========================================
         ImGui::SameLine(0, 0); 
         
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.12f, 0.75f)); 
         ImGui::BeginChild("MainContent", ImVec2(contentWidth, windowHeight), false);
         
-        ImGui::Dummy(ImVec2(40.0f, 40.0f)); 
-        
+        // --- HOME PAGE ---
         if (activeTab == 0) {
+            ImGui::Dummy(ImVec2(40.0f, 40.0f)); 
             float innerWidth = contentWidth - 80.0f; 
             
             ImGui::SetCursorPosX(40.0f);
-            ImGui::TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "COMMAND CENTER");
+            ImGui::TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "Home");
             ImGui::SetCursorPosX(40.0f);
             ImGui::Separator();
             ImGui::Dummy(ImVec2(0.0f, 20.0f));
@@ -217,7 +231,7 @@ namespace VaultDashboard {
             ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
             ImGui::SetCursorPosX(40.0f);
-            ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "SAVED AI STRATEGY & WALKTHROUGHS");
+            ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "SAVED STRATEGY & WALKTHROUGHS");
             ImGui::SetCursorPosX(40.0f);
             
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.05f, 0.9f));
@@ -256,7 +270,7 @@ namespace VaultDashboard {
                         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 0.9f));
                         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
                         
-                        std::string btnLabel = "▶ Watch##" + linkData; 
+                        std::string btnLabel = "Watch##" + linkData; 
                         
                         if (ImGui::Button(btnLabel.c_str())) {
                             std::string url = (linkData.find("http") == 0) ? linkData : "https://www.youtube.com/watch?v=" + linkData;
@@ -281,6 +295,12 @@ namespace VaultDashboard {
             ImGui::PopStyleVar();
             ImGui::PopStyleColor();
         }
+        
+        // --- GAME MANAGEMENT (EDIT MODE) ---
+        else if (activeTab == 3) {
+            // Drop new window logic right into the main content area!
+            GameManagement::Render(contentWidth, windowHeight, bgTexture, activeUser.username);
+        }
 
         ImGui::EndChild();
         ImGui::PopStyleColor(); 
@@ -288,7 +308,6 @@ namespace VaultDashboard {
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(); 
         
-        // Always return Font scale to normal before exiting frame
         ImGui::GetIO().FontGlobalScale = originalScale;
         return false; 
     }

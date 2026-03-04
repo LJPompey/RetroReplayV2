@@ -140,7 +140,7 @@ namespace InitialSetup {
         float originalScale = ImGui::GetIO().FontGlobalScale;
         ImGui::GetIO().FontGlobalScale = currentScale;
 
-        // --- NEW: TOP-LEFT LOGOUT BUTTON ---
+        // --- TOP-LEFT LOGOUT BUTTON ---
         ImGui::SetCursorPos(ImVec2(30.0f, 30.0f));
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));
         if (ImGui::Button("<- Logout", ImVec2(btnWidth * 0.4f, btnHeight * 0.6f))) {
@@ -260,14 +260,14 @@ namespace InitialSetup {
                 ImGui::Button("Analyzing data...", ImVec2(btnWidth * 0.6f, btnHeight * 0.6f));
                 ImGui::PopStyleColor();
             } 
-            else if (ImGui::Button("Generate AI Strategy", ImVec2(btnWidth * 0.6f, btnHeight * 0.6f))) {
+            else if (ImGui::Button("Generate Strategy", ImVec2(btnWidth * 0.6f, btnHeight * 0.6f))) {
                 if (isFormComplete) {
                     recommendationsGenerated = true;
                     generationErrorMsg = "";
                     isGenerating = true; 
                     
                     std::lock_guard<std::mutex> lock(strategyMutex);
-                    finalStrategyText = "Booting AI link... Please wait a few seconds while strategies are compiled.";
+                    finalStrategyText = "Booting link... Please wait a few seconds while strategies are compiled.";
                     
                     std::thread(FetchStrategiesFromCloud, userSystems, std::string(currentGoals), std::string(yearlyGoal)).detach();
                 } else {
@@ -292,8 +292,8 @@ namespace InitialSetup {
             
             if (isGenerating) {
                 ImGui::Dummy(ImVec2(0.0f, spacing));
-                ImGui::SetCursorPosX((itemWidth - ImGui::CalcTextSize("Booting Secure AI Link...").x) * 0.5f);
-                ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Booting Secure AI Link...");
+                ImGui::SetCursorPosX((itemWidth - ImGui::CalcTextSize("Booting Secure Link...").x) * 0.5f);
+                ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Booting Secure Link...");
             } 
             else {
                 std::istringstream stream(finalStrategyText);
@@ -331,7 +331,7 @@ namespace InitialSetup {
                             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 0.9f));
                             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
                             
-                            std::string btnLabel = "▶ Watch##" + linkData; 
+                            std::string btnLabel = "Watch##" + linkData; 
                             
                             if (ImGui::Button(btnLabel.c_str())) {
                                 std::string url = (linkData.find("http") == 0) ? linkData : "https://www.youtube.com/watch?v=" + linkData;
