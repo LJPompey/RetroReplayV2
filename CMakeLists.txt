@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(RetroReplayV2)
+project(RetroREPLAY)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -47,10 +47,10 @@ FetchContent_MakeAvailable(cpr)
 # ---------------------------------------------------------
 
 # 4. Your Executable
-add_executable(RetroReplayV2 src/main.cpp)
+add_executable(RetroREPLAY src/main.cpp)
 
 # 5. Bulletproof the include paths for the main executable
-target_include_directories(RetroReplayV2 PRIVATE 
+target_include_directories(RetroREPLAY PRIVATE 
     third_party/stb
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
@@ -58,7 +58,7 @@ target_include_directories(RetroReplayV2 PRIVATE
 )
 
 # 6. Link everything together
-target_link_libraries(RetroReplayV2 PRIVATE 
+target_link_libraries(RetroREPLAY PRIVATE 
     ImGui 
     glfw 
     OpenGL::GL 
